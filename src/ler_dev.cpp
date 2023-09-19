@@ -155,10 +155,10 @@ namespace ler
 
     vk::Viewport LerDevice::createViewport(const vk::Extent2D& extent)
     {
-        //return {0, 0, static_cast<float>(extent.width), static_cast<float>(extent.height), 0, 1.0f};
-        auto h = static_cast<float>(extent.height);
+        return {0, 0, static_cast<float>(extent.width), static_cast<float>(extent.height), 0, 1.0f};
+        /*auto h = static_cast<float>(extent.height);
         auto w = static_cast<float>(extent.width);
-        return {0, h, w, -h, 0, 1.0f};
+        return {0, h, w, -h, 0, 1.0f};*/
     }
 
     void LerDevice::getFrustumPlanes(glm::mat4 mvp, glm::vec4* planes)
@@ -269,6 +269,26 @@ namespace ler
         texture->allocation = nullptr;
 
         return texture;
+    }
+
+    void LerDevice::initTextureLayout(const TexturePtr& texture, vk::ImageLayout layout, vk::AccessFlagBits access)
+    {
+        using ps = vk::PipelineStageFlagBits;
+        std::vector<vk::ImageMemoryBarrier> imageBarriers;
+        auto& barrier = imageBarriers.emplace_back();
+        barrier.setImage(texture->handle);
+        barrier.setOldLayout(vk::ImageLayout::eUndefined);
+        barrier.setNewLayout(layout);
+        barrier.setSrcAccessMask(vk::AccessFlagBits::eNone);
+        barrier.setDstAccessMask(access);
+        barrier.setSrcQueueFamilyIndex(VK_QUEUE_FAMILY_IGNORED);
+        barrier.setDstQueueFamilyIndex(VK_QUEUE_FAMILY_IGNORED);
+        vk::ImageAspectFlags aspect = guessImageAspectFlags(texture->info.format, false);
+        barrier.setSubresourceRange(vk::ImageSubresourceRange(aspect, 0, texture->info.mipLevels, 0, texture->info.arrayLayers));
+
+        auto cmd = createCommand();
+        cmd->cmdBuf.pipelineBarrier(ps::eAllCommands, ps::eAllCommands, vk::DependencyFlags(), {}, {}, imageBarriers);
+        submitAndWait(cmd);
     }
 
     void RenderTarget::reset(const std::span<TexturePtr>& textures)
@@ -498,13 +518,14 @@ namespace ler
             std::vector<vk::DescriptorBindingFlags> binding_flags(descriptorLayoutInfo.bindingCount, bindless_flags);
             extended_info.setBindingFlags(binding_flags);
 
+            static constexpr uint32_t kMaxSets = 16;
             descriptorLayoutInfo.setFlags(vk::DescriptorSetLayoutCreateFlagBits::eUpdateAfterBindPool);
             descriptorLayoutInfo.setPNext(&extended_info);
             for (auto& b: allocator.layoutBinding)
-                descriptorPoolSizeInfo.emplace_back(b.descriptorType, b.descriptorCount + 2);
+                descriptorPoolSizeInfo.emplace_back(b.descriptorType, b.descriptorCount * kMaxSets);
             descriptorPoolInfo.setPoolSizes(descriptorPoolSizeInfo);
             descriptorPoolInfo.setFlags(vk::DescriptorPoolCreateFlagBits::eUpdateAfterBind);
-            descriptorPoolInfo.setMaxSets(4);
+            descriptorPoolInfo.setMaxSets(kMaxSets);
             allocator.pool = device.createDescriptorPoolUnique(descriptorPoolInfo);
             allocator.layout = device.createDescriptorSetLayoutUnique(descriptorLayoutInfo);
             setLayouts.push_back(allocator.layout.get());

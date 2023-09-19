@@ -8,7 +8,7 @@
 
 namespace ler
 {
-    void CascadedShadowPass::init(LerDevicePtr& device, GLFWwindow* window)
+    void CascadedShadowPass::init(const LerDevicePtr& device, RenderSceneList& scene, GLFWwindow* window)
     {
         vk::Extent2D extent(4096, 4096);
         vk::Format depthFormat = vk::Format::eD32Sfloat;
@@ -28,12 +28,12 @@ namespace ler
         m_descriptor = m_pipeline->createDescriptorSet(0);
     }
 
-    void CascadedShadowPass::onSceneChange(LerDevicePtr& device, BatchedMesh& batch)
+    void CascadedShadowPass::onSceneChange(const LerDevicePtr& device, SceneBuffers* scene)
     {
-        device->updateStorage(m_descriptor, 0, batch.instanceBuffer, VK_WHOLE_SIZE);
+        //device->updateStorage(m_descriptor, 0, batch.instanceBuffer, VK_WHOLE_SIZE);
     }
 
-    void CascadedShadowPass::render(LerDevicePtr& device, FrameWindow& frame, BatchedMesh& batch, const CameraParam& param, SceneParam& scene)
+    void CascadedShadowPass::render(const LerDevicePtr& device, FrameWindow& frame, RenderSceneList& sceneList, RenderParams& params)
     {
         /*
         update(param, scene);

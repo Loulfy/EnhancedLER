@@ -4,6 +4,7 @@
 #extension GL_ARB_separate_shader_objects: enable
 #extension GL_ARB_shading_language_420pack: enable
 #extension GL_GOOGLE_include_directive: require
+#extension GL_EXT_shader_8bit_storage: require
 
 #include "ler_shader.hpp"
 
@@ -105,10 +106,10 @@ void main()
     N = normalize(tnorm);
 
     float NdotL = max(0.0, dot(N, L));
-    vec3 diff = texture(textures[nonuniformEXT(m.texId)], inUV).xyz * m.color;// * NdotL;
+    vec3 diff = texture(textures[nonuniformEXT(m.texId)], inUV).xyz * m.color * NdotL;
     //vec4 diff = texture(textures[nonuniformEXT(m.texId)], inUV) * NdotL;
 
-    float shadow = textureProj(shadowCoord, vec2(0.0), cascadeIndex);
+    //float shadow = textureProj(shadowCoord, vec2(0.0), cascadeIndex);
 
     //float shadow = filterPCF(shadowCoord / shadowCoord.w, cascadeIndex);
 

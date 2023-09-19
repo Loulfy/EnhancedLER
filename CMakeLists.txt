@@ -18,12 +18,12 @@ find_package(inih REQUIRED)
 find_package(glm REQUIRED)
 find_package(stb REQUIRED)
 find_package(gli REQUIRED)
+find_package(meshoptimizer REQUIRED)
 find_package(vulkan-memory-allocator REQUIRED)
 find_package(bshoshany-thread-pool REQUIRED)
 
 add_subdirectory(libs/glslang)
 add_subdirectory(libs/SPIRV-Reflect)
-add_subdirectory(libs/dynamic_bitset)
 
 include_directories(src)
 include_directories(libs/imgui)
@@ -86,8 +86,12 @@ set(LER
     "src/ler_csm.cpp"
     "src/ler_psx.hpp"
     "src/ler_psx.cpp"
+    "src/ler_mesh.hpp"
+    "src/ler_mesh.cpp"
     "src/ler_cull.hpp"
     "src/ler_cull.cpp"
+    "src/ler_draw.hpp"
+    "src/ler_draw.cpp"
     "src/ler_app.hpp"
     "src/ler_app.cpp"
     "src/mpsc.inl"
@@ -110,7 +114,6 @@ target_link_libraries(ler PRIVATE
     bshoshany-thread-pool::bshoshany-thread-pool
     spirv-reflect-static
     flecs::flecs_static
-    sul::dynamic_bitset
     glslang
     glslang-default-resource-limits
     SPIRV
@@ -122,5 +125,6 @@ target_link_libraries(ler PRIVATE
     PhysX::PhysXCooking
     PhysX::PhysXExtensions
     PhysX::PhysXCharacterKinematic
+    meshoptimizer::meshoptimizer
     wbemuuid
 )

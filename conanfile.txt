@@ -7,6 +7,7 @@ glm/cci.20230113
 gli/cci.20210515
 vulkan-memory-allocator/3.0.1
 bshoshany-thread-pool/3.5.0
+meshoptimizer/0.17
 luajit/2.1.0-beta3
 assimp/5.2.2
 flecs/3.2.4

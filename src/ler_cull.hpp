@@ -13,11 +13,14 @@ namespace ler
     {
     public:
 
-        void init(LerDevicePtr& device);
-        void prepare(LerDevicePtr& device, BatchedMesh& batch);
-        void dispatch(LerDevicePtr& device, const CameraParam& camera, BatchedMesh& batch, bool prePass);
+        void init(const LerDevicePtr& device, const std::array<BufferPtr, 2>& buffers);
+        void dispatch(const CommandPtr& cmd, const CameraParam& camera, uint32_t instanceCount, bool prePass);
+        void createDepthPyramid(const LerDevicePtr& device, vk::Extent2D extent);
+        void renderDepthPyramid(const TexturePtr& depth, const CommandPtr& cmd);
+        void updateDescriptors(const TexturePtr& depth);
 
-        [[nodiscard]] BufferPtr getCountBuffer() const { return m_visibleBuffer; }
+        [[nodiscard]] const BufferPtr& getCountBuffer() const { return m_visibleBuffer; }
+        [[nodiscard]] const BufferPtr& getCommandBuffers() const { return m_commandBuffer; }
         uint32_t drawCount;
 
     private:
@@ -26,22 +29,20 @@ namespace ler
         PipelinePtr m_pipeline;
         BufferPtr m_frustumBuffer;
         BufferPtr m_visibleBuffer;
-        TexturePtr m_depthPyramid;
-        std::array<vk::DescriptorSet,2> m_descriptor;
+        BufferPtr m_commandBuffer;
+        vk::DescriptorSet m_descriptor;
 
+        u32 m_hzbSize = 2048u;
+        u32 m_mipLevels = 11u;
         PipelinePtr m_pyramid;
+        TexturePtr m_depthPyramid;
+        std::array<vk::ImageView,16> m_views;
         vk::UniqueSampler m_reductionSampler;
+        std::array<vk::DescriptorSet,16> m_slots;
 
-        std::array<vk::ImageView,13> m_views;
-
-        void generateDepthPyramid(LerDevicePtr& device);
-
-        void addLayoutPyramid(CommandPtr& cmd);
-        void endBarrier(CommandPtr& cmd, uint32_t mipLevel);
-        void beginBarrier(CommandPtr& cmd);
-
-        static void startDepthBarrier(CommandPtr& cmd, const TexturePtr& depth);
-        static void endDepthBarrier(CommandPtr& cmd, const TexturePtr& depth);
+        void beginBarrier(const CommandPtr& cmd);
+        void endBarrier(const CommandPtr& cmd, uint32_t mipLevel);
+        void addLayoutPyramid(const CommandPtr& cmd);
     };
 }
 

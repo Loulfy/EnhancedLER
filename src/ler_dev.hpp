@@ -356,6 +356,7 @@ namespace ler
         // Texture
         TexturePtr createTexture(vk::Format format, const vk::Extent2D& extent, vk::SampleCountFlagBits sampleCount = vk::SampleCountFlagBits::e1, bool isRenderTarget = false, uint32_t arrayLayers = 1, uint32_t mipLevels = 1);
         TexturePtr createTextureFromNative(vk::Image image, vk::Format format, const vk::Extent2D& extent);
+        void initTextureLayout(const TexturePtr& texture, vk::ImageLayout layout, vk::AccessFlagBits access);
         vk::UniqueSampler createSampler(const vk::SamplerAddressMode& addressMode, bool filter);
         vk::UniqueSampler createSamplerMipMap(const vk::SamplerAddressMode& addressMode, bool filter, float maxLod, bool reduction = false);
         static vk::ImageAspectFlags guessImageAspectFlags(vk::Format format, bool stencil = true);
@@ -468,7 +469,7 @@ namespace ler
         CommandPtr command;
     };
 
-    class BatchedMesh;
+    /*class BatchedMesh;
     struct SubmitTransfer
     {
         CommandPtr command;
@@ -476,7 +477,7 @@ namespace ler
         BatchedMesh* batch;
     };
 
-    using AsyncRequest = std::variant<SubmitTexture, SubmitTransfer>;
+    using AsyncRequest = std::variant<SubmitTexture, SubmitTransfer>;*/
 }
 
 #endif //LER_DEV_H

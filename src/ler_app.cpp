@@ -88,65 +88,31 @@ namespace ler
         bindController(std::make_shared<FpsCamera>());
         m_controller->updateMatrices();
 
-        m_scene.allocate(m_device);
+        m_device->getTexturePool()->fetch("white.png", ler::FsTag_Assets);
 
-        /*m_world.system<transform, dirty, transform>().kind(flecs::OnUpdate).parent().cascade().optional().each([&](flecs::entity e, transform& m, dirty, transform& p){
-            if(e.parent())
-                m.worldPos = p.worldPos * m.localPos;
-            else
-                m.worldPos = m.localPos;
-            //log::info("transform {} : {}", e.path().c_str(), glm::to_string(m.worldPos));
-            log::info("transform {}", e.path().c_str());
-        });
+        m_renderer.allocate(m_device);
+        m_renderer.install(m_world, m_device);
 
-        m_world.system<physic, transform>().kind(flecs::OnUpdate).parent().cascade().each([](flecs::entity e, physic& p, transform& t){
-            auto* glmData = const_cast<float*>(glm::value_ptr(t.worldPos));
-            p.actor->setGlobalPose(physx::PxTransform(physx::PxMat44(glmData)));
-        });
+        // HERE
 
-        m_world.system<mesh, transform>().parent().cascade().run([](flecs::iter_t *it) {
-            //log::info("Draw begin");
-            // Walk over the iterator, forward to the system callback
-            while (ecs_iter_next(it)) {
-                it->callback(it);
-            }
-            //log::info("Draw end");
-        }).iter([&](flecs::iter& it, mesh* m, transform* t){
-            for(auto i : it)
-            {
-                uint32_t matId = m_scene.meshes[m[i].meshIndex]->materialId;
-                renderList.addPerDraw(m[i], t[i], matId);
-                //renderList.emplace_back(t[i].worldPos, glm::vec3(0.f), glm::vec3(0.f), matId);
-            }
-                //log::info("draw size: {}", it.entity(i).name().c_str());
-        });
-
-        m_world.system().kind(flecs::PostUpdate).iter([](flecs::iter& it) {
-            it.world().remove_all<dirty>();
-        });
-
-        m_world.observer<transform>().event(flecs::OnSet).each([](flecs::entity e, transform&) {
-            //log::info("update {}", e.name().c_str());
-            markDirty(e);
-        });*/
-
-        m_world.system<mesh, transform>().each([&](flecs::entity e, mesh& m, transform& t){
+        /*
+        m_world.system<CMesh, CTransform>().each([&](flecs::entity e, CMesh& m, CTransform& t){
             auto info = m_scene.meshes[m.meshIndex];
             m_scene.renderList.addPerDraw(m, t, info.get());
-        });
+        });*/
 
-        m_world.observer<physic>().event(flecs::OnSet).each([&](flecs::entity e, physic& p) {
+        m_world.observer<CPhysic>().event(flecs::OnSet).each([&](flecs::entity e, CPhysic& p) {
             m_physx->getScene()->addActor(*p.actor);
         });
 
-        m_world.observer<physic>().event(flecs::OnRemove).each([&](flecs::entity e, physic& p) {
+        m_world.observer<CPhysic>().event(flecs::OnRemove).each([&](flecs::entity e, CPhysic& p) {
             m_physx->getScene()->removeActor(*p.actor);
         });
 
-        m_world.observer<transform>().event(flecs::OnSet).each([&](flecs::entity e, transform& t) {
-            auto* glmData = const_cast<float*>(glm::value_ptr(t.worldPos));
-            if(e.has<physic>())
-                e.get<physic>()->actor->setGlobalPose(convertGlmToPx(t.worldPos));
+        m_world.observer<CTransform>().event(flecs::OnSet).each([&](flecs::entity e, CTransform& t) {
+            auto* glmData = const_cast<float*>(glm::value_ptr(t.model));
+            if(e.has<CPhysic>())
+                e.get<CPhysic>()->actor->setGlobalPose(convertGlmToPx(t.model));
         });
     }
 
@@ -216,13 +182,19 @@ namespace ler
         m_device->submitOneshot(cmd);
     }
 
+    void LerApp::notifyResize()
+    {
+        m_renderer.resize(m_device, m_swapChain.extent);
+        for(auto& pass : m_renderPasses)
+            pass->resize(m_device, m_swapChain.extent);
+    }
+
     void LerApp::resize(int width, int height)
     {
         m_config.width = static_cast<uint32_t>(width);
         m_config.height = static_cast<uint32_t>(height);
         updateSwapChain();
-        for(auto& pass : m_renderPasses)
-            pass->resize(m_device, m_swapChain.extent);
+        notifyResize();
     }
 
     void LerApp::run()
@@ -240,7 +212,9 @@ namespace ler
         double x, y;
 
         for(auto& pass : m_renderPasses)
-            pass->init(m_device, m_window);
+            pass->init(m_device, m_renderer, m_window);
+
+        notifyResize();
 
         while(!glfwWindowShouldClose(m_window))
         {
@@ -251,12 +225,12 @@ namespace ler
             assert(result == vk::Result::eSuccess);
 
             // All commands will now wait next image
-            //m_device->queueWaitForSemaphore(CommandQueue::Graphics, presentSemaphore.get(), 0);
+            m_device->queueWaitForSemaphore(CommandQueue::Graphics, presentSemaphore.get(), 0);
 
             // Layout transition
             cmd = m_device->createCommand();
             cmd->addBarrier(m_images[swapChainIndex], vk::PipelineStageFlagBits::eTopOfPipe, vk::PipelineStageFlagBits::eColorAttachmentOutput);
-            m_device->submitOneshot(cmd);
+            m_device->submitCommand(cmd);
 
             // Update Camera
             if(isCursorLock())
@@ -269,9 +243,8 @@ namespace ler
             for(auto& pass : m_renderPasses)
                 pass->prepare(m_device);
 
-            m_scene.renderList.clear();
+            m_physx->simulate();
             m_world.progress();
-            m_scene.renderList.flush(m_device, m_scene.instanceBuffer, m_scene.aabbBuffer);
 
             //m_controller->updateMatrices();
             camera.proj = m_controller->getProjMatrix();
@@ -280,34 +253,37 @@ namespace ler
 
             if(m_selected != flecs::entity::null())
             {
-                auto t = m_selected.get<transform>()->worldPos;
-                auto m = m_selected.get<mesh>()->meshIndex;
-                glm::vec3 min = m_scene.meshes[m]->bMin;
-                glm::vec3 max = m_scene.meshes[m]->bMax;
-                transformBoundingBox(t, min, max);
+                const auto* t = m_selected.get<CTransform>();
+                const auto* m = m_selected.get<CMesh>();
+                glm::vec3 min = m->min;
+                glm::vec3 max = m->max;
+
+                min = glm::vec3(t->model * glm::vec4(min, 1.f));
+                max = glm::vec3(t->model * glm::vec4(max, 1.f));
                 glm::vec3 center = (min+max)/2.f;
-                //glm::quat rot = glm::quat_cast(t);
+
                 glm::mat4 object = glm::translate(glm::mat4(1.f), center);
                 ImGuizmo::BeginFrame();
                 ImGuizmo::SetRect(0, 0, m_config.width, m_config.height);
-                ImGuizmo::Manipulate(glm::value_ptr(camera.view), glm::value_ptr(camera.proj), ImGuizmo::OPERATION::TRANSLATE, ImGuizmo::WORLD, glm::value_ptr(t));
+                ImGuizmo::Manipulate(glm::value_ptr(camera.view), glm::value_ptr(camera.proj), ImGuizmo::OPERATION::TRANSLATE, ImGuizmo::WORLD, glm::value_ptr(object));
 
-                m_selected.set<transform>({t, t});
+                //m_selected.set<CTransform>({t});
                 if(ImGui::GetIO().KeyCtrl)
                     m_selected = flecs::entity::null();
             }
 
             // Render
+            RenderParams params(camera);
             for(auto& pass : m_renderPasses)
-                pass->render(m_device, m_targets[swapChainIndex], m_scene, camera, scene);
+                pass->render(m_device, m_targets[swapChainIndex], m_renderer, params);
 
             // Next command will signal present image
-            //m_device->queueSignalSemaphore(CommandQueue::Graphics, presentSemaphore.get(), 0);
+            m_device->queueSignalSemaphore(CommandQueue::Graphics, presentSemaphore.get(), 0);
 
             // Layout transition
             cmd = m_device->createCommand();
             cmd->addBarrier(m_images[swapChainIndex], vk::PipelineStageFlagBits::eColorAttachmentOutput, vk::PipelineStageFlagBits::eBottomOfPipe);
-            m_device->submitOneshot(cmd);
+            m_device->submitCommand(cmd);
 
             // Present
             vk::PresentInfoKHR presentInfo;
@@ -320,14 +296,13 @@ namespace ler
             result = queue.presentKHR(&presentInfo);
             assert(result == vk::Result::eSuccess);
 
-            m_physx->simulate();
-
-            if(m_scene.checkUpdate(m_device))
+            for(SceneBuffers* s : SceneImporter::PollUpdate(m_device, m_world))
             {
                 for(auto& pass : m_renderPasses)
-                    pass->onSceneChange(m_device, m_scene);
+                    pass->onSceneChange(m_device, s);
             }
 
+            AsyncQueue<AsyncRequest>::Update(*this);
             AsyncQueue<AsyncRequest>::Update(*this);
             Event::GetDispatcher().update();
             m_device->runGarbageCollection();

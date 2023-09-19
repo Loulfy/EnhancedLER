@@ -4,11 +4,17 @@
 
 #define VMA_IMPLEMENTATION
 #include "ler_vki.hpp"
+#include <ranges>
 
 VULKAN_HPP_DEFAULT_DISPATCH_LOADER_DYNAMIC_STORAGE
 
 namespace ler
 {
+    bool gpuFilter(const vk::PhysicalDevice& phyDev)
+    {
+        return phyDev.getProperties().deviceType == vk::PhysicalDeviceType::eDiscreteGpu;
+    }
+
     VulkanInitializer::~VulkanInitializer()
     {
         vmaDestroyAllocator(m_context.allocator);
@@ -70,7 +76,8 @@ namespace ler
         VULKAN_HPP_DEFAULT_DISPATCHER.init(m_instance.get());
 
         // Pick First GPU
-        m_physicalDevice = m_instance->enumeratePhysicalDevices().front();
+        auto physicalDeviceList = m_instance->enumeratePhysicalDevices();
+        m_physicalDevice = *std::ranges::find_if(physicalDeviceList, gpuFilter);
         log::info("GPU: {}", m_physicalDevice.getProperties().deviceName.data());
 
         std::set<std::string> supportedExtensionSet;
@@ -127,6 +134,13 @@ namespace ler
 
         for(auto& q : queueCreateInfos)
             log::info("Queue Family {}: {}", q.queueFamilyIndex, vk::to_string(queueFamilies[q.queueFamilyIndex].queueFlags));
+
+        vk::PhysicalDeviceProperties2 p2;
+        vk::PhysicalDeviceSubgroupProperties subgroupProps;
+        p2.pNext = &subgroupProps;
+        m_physicalDevice.getProperties2(&p2);
+        log::info("SubgroupSize: {}", subgroupProps.subgroupSize);
+        log::info("Subgroup Support: {}", vk::to_string(subgroupProps.supportedOperations));
 
         // Create Device
         vk::DeviceCreateInfo deviceInfo;

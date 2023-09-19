@@ -6,8 +6,7 @@
 #define LER_CSM_HPP
 
 #include "ler_cam.hpp"
-#include "ler_dev.hpp"
-#include "ler_res.hpp"
+#include "ler_draw.hpp"
 
 namespace ler
 {
@@ -23,9 +22,9 @@ namespace ler
             glm::mat4 viewProjMatrix;
         };
 
-        void init(LerDevicePtr& device, GLFWwindow* window) override;
-        void onSceneChange(LerDevicePtr& device, BatchedMesh& batch) override;
-        void render(LerDevicePtr& device, FrameWindow& frame, BatchedMesh& batch, const CameraParam& param, SceneParam& scene) override;
+        void init(const LerDevicePtr& device, RenderSceneList& scene, GLFWwindow* window) override;
+        void onSceneChange(const LerDevicePtr& device, SceneBuffers* scene) override;
+        void render(const LerDevicePtr& device, FrameWindow& frame, RenderSceneList& sceneList, RenderParams& params) override;
         void update(const CameraParam& param, SceneParam& scene);
 
     public:

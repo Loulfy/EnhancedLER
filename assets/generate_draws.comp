@@ -55,7 +55,7 @@ bool isAABBinFrustum(vec3 min, vec3 max)
 bool projectSphere(vec3 c, float r, float znear, float P00, float P11, out vec4 aabb)
 {
     if (c.z < r + znear)
-    return false;
+        return false;
 
     vec3 cr = c * r;
     float czr2 = c.z * c.z - r * r;
@@ -115,6 +115,56 @@ vec3 calcNdcPos(vec3 pos, mat4 clip)
     return res;
 }
 
+const float cam_near = 0.1f;
+const float cam_far = 48.f;
+const vec2 resolution = vec2(1280.f, 720.f);
+
+const vec2 MAX_DEPTH_IMAGE_SIZE = vec2(2048.f);
+
+const mat4 clip = mat4(
+1.0f, 0.0f, 0.0f, 0.0f,
+0.0f, -1.0f, 0.0f, 0.0f,
+0.0f, 0.0f, 0.5f, 0.0f,
+0.0f, 0.0f, 0.5f, 1.0f
+);
+
+// for frustum culling
+const int NUM_PLANES = 4;
+const vec3 a[NUM_PLANES] = {
+vec3(1.f, 0.f, 0.f),
+vec3(-1.f, 0.f, 0.f),
+vec3(0.f, -1.f, 0.f),
+vec3(0.f, 1.f, 0.f)
+};
+const vec3 n[NUM_PLANES] = {
+vec3(-1.f, 0.f, 0.f),
+vec3(1.f, 0.f, 0.f),
+vec3(0.f, 1.f, 0.f),
+vec3(0.f, -1.f, 0.f)
+};
+
+uint cull_near_far(float view_z)
+{
+    return uint(step(view_z, - cam_near) *
+    step(- view_z, cam_far));
+}
+
+uint cull_lrtb(vec3 ndc)
+{
+    uint res = 1;
+    for (int i = 0; i < NUM_PLANES; i ++)
+    {
+        float B = - dot(ndc - a[i], n[i]);
+        res &= uint(step(B, 0.f));
+    }
+    return res;
+}
+
+uint is_skybox(vec2 mn, vec2 mx )
+{
+    return uint(step(dot(mn, mx), 0.f));
+}
+
 shared uint drawOffset;
 
 void main()
@@ -128,23 +178,46 @@ void main()
     if(drawIndex < frustum.num) //numShapesToCull)
     {
         Instance obj = props[drawIndex];
-        bDrawMesh = isAABBinFrustum(obj.bbmin, obj.bbmax);
 
-        vec3 center = (obj.bbmin+obj.bbmax)/2.f;
-        float radius = max(length(obj.bbmax - center), length(obj.bbmin - center));
-        vec3 centerViewSpace = (view * vec4(center, 1.0)).xyz;
+        vec4 mi = obj.model * vec4(obj.bbmin, 1.f);
+        vec4 ma = obj.model * vec4(obj.bbmax, 1.f);
+        bDrawMesh = isAABBinFrustum(mi.xyz, ma.xyz);
 
-        float P00 = proj[0][0];
-        float P11 = proj[1][1];
-        float zNear = 0.1f;
+        //float radius = obj.bounds.w;
+        //float radius = (ma - mi).y/2.f;
+        vec3 center = (obj.model * vec4(obj.bounds.xyz, 1.0)).xyz;
+        float radius = length(ma.xyz - center);
 
+        if(frustum.cull == 42 && bDrawMesh)
+        {
+            vec3 centerViewSpace = (view * vec4(center, 1.0)).xyz;
+            float P00 = proj[0][0];
+            float P11 = proj[1][1];
+            float zNear = proj[3][2];//0.1f;//proj[3][2];
+            vec4 AABB;
+            if (tryCalculateSphereBounds(centerViewSpace, radius, zNear, P00, P11, AABB))
+            {
+                ivec2 size = textureSize(depthPyramid, 0);
+                float boundsWidth = (AABB.z - AABB.x) * 2048.f;
+                float boundsHeight = (AABB.w - AABB.y) * 2048.f;
+                float mipIndex = floor(log2(max(boundsWidth, boundsHeight)));
 
+                float occluderDepth = textureLod(depthPyramid, 0.5 * (AABB.xy + AABB.zw), mipIndex).x;
+                float nearestBoundsDepth = zNear / (-centerViewSpace.z - radius);
+
+                bool bOcclusionCulled = occluderDepth >= nearestBoundsDepth;
+                bDrawMesh = bOcclusionCulled;
+            }
+        }
+
+        /*
         if(frustum.cull == 42 && bDrawMesh)
         {
             vec3 bbmin = obj.bbmin;
             vec3 bbmax = obj.bbmax;
             vec3 bbsize = bbmax - bbmin;
-            mat4 viewProj = proj * view;
+            mat4 model_view = view * obj.model;
+            mat4 projection_clip = clip * proj;
 
             const int CORNER_COUNT = 8;
             vec3 corners[CORNER_COUNT] = {
@@ -160,92 +233,66 @@ void main()
 
             vec2 ndc_min = vec2(1.f);
             vec2 ndc_max = vec2(-1.f);
-            float minZ = 1.f;
+            float z_min = 1.f;
+
+            uint res = 0;
             for (int i = 0; i < CORNER_COUNT; i++)
             {
-                //transform world space aaBox to NDC
-                //vec3 clipPos = calcNdcPos(corners[i], viewProj);
+                // cull near far
+                vec4 view_pos = model_view * vec4(corners[i], 1.f);
+                uint nf_res = cull_near_far(view_pos.z);
 
-                vec4 clipPos = vec4(corners[i], 1) * viewProj;
+                // cull left right top bottom
+                vec4 clip_pos = projection_clip * view_pos;
+                vec3 ndc_pos = clip_pos.xyz / clip_pos.w;
 
-                clipPos.z = max(clipPos.z, 0);
+                // clip objects behind near plane
+                ndc_pos.z *= step(view_pos.z, cam_near);
 
-                clipPos.xyz = clipPos.xyz / clipPos.w;
+                uint lrtb_res = cull_lrtb(ndc_pos);
 
-                clipPos.xy = clamp(clipPos.xy, -1, 1);
-                clipPos.xy = clipPos.xy * vec2(0.5, -0.5) + vec2(0.5, 0.5);
+                ndc_pos.xy = max(vec2(-1.f), min(vec2(1.f), ndc_pos.xy));
+                ndc_pos.z = max(0.f, min(1.f, ndc_pos.z));
 
-                ndc_min = min(clipPos.xy, ndc_min);
-                ndc_max = max(clipPos.xy, ndc_max);
+                ndc_min = min(ndc_min, ndc_pos.xy);
+                ndc_max = max(ndc_max, ndc_pos.xy);
+                z_min = min(z_min, ndc_pos.z);
 
-                minZ = clamp(min(minZ, clipPos.z),0.f,1.f);
+                res = max(res, nf_res * lrtb_res);
             }
 
-            vec2 RTSize = vec2(2048, 2048);
-            vec4 boxUVs = vec4(ndc_min, ndc_max);
+            res = max(res, is_skybox(ndc_min, ndc_max));
 
-            // Calculate hi-Z buffer mip
-            vec2 size = (ndc_max - ndc_min) * RTSize.xy;
-            float mip = ceil(log2(max(size.x, size.y)));
+            vec2 viewport = vec2(1280.f, 780.f);
+            vec2 scr_pos_min = (ndc_min * .5f + .5f) * viewport;
+            vec2 scr_pos_max = (ndc_max * .5f + .5f) * viewport;
+            vec2 scr_rect = (ndc_max - ndc_min) * .5f * viewport;
+            float scr_size = max(scr_rect.x, scr_rect.y);
 
-            mip = clamp(mip, 0, 12);
+            int mip = int(ceil(log2(scr_size)));
+            uvec2 dim = (uvec2(scr_pos_max) >> mip) - (uvec2(scr_pos_min) >> mip);
+            int use_lower = int(step(dim.x, 2.f) * step(dim.y, 2.f));
+            mip = use_lower * max(0, mip - 1) + (1 - use_lower) * mip;
 
-            // Texel footprint for the lower (finer-grained) level
-            float  level_lower = max(mip - 1, 0);
-            vec2 scale = vec2(exp2(-level_lower));
-            vec2 a = floor(boxUVs.xy*scale);
-            vec2 b = ceil(boxUVs.zw*scale);
-            vec2 dims = b - a;
+            vec2 uv_scale = vec2(uvec2(resolution) >> mip) / resolution / vec2(2048 >> mip);
+            vec2 uv_min = scr_pos_min * uv_scale;
+            vec2 uv_max = scr_pos_max * uv_scale;
+            vec2 coords[4] = {
+                uv_min,
+                vec2(uv_min.x, uv_max.y),
+                vec2(uv_max.x, uv_min.y),
+                uv_max
+            };
 
-            // Use the lower level if we only touch <= 2 texels in both dimensions
-            if (dims.x <= 2 && dims.y <= 2)
-                mip = level_lower;
+            float scene_z = 0.f;
+            for (int i = 0; i < 4; i ++) {
+                scene_z = max(scene_z, textureLod(depthPyramid, coords[i], mip).r);
+            }
 
-            vec4 depth = vec4(
-            textureLod(depthPyramid, boxUVs.xy, mip).r,
-            textureLod(depthPyramid, boxUVs.zy, mip).r,
-            textureLod(depthPyramid, boxUVs.xw, mip).r,
-            textureLod(depthPyramid, boxUVs.zw, mip).r
-            );
-
-            float maxDepth = max(max(max(depth.x, depth.y), depth.z), depth.w);
-            bDrawMesh = minZ <= maxDepth;
-        }
-
-        /*vec4 aabb;
-        if (frustum.cull == 42 && bDrawMesh && projectSphere(center, radius, zNear, P00, P11, aabb))
-        {
-            ivec2 size = textureSize(depthPyramid, 0);
-            float width = (aabb.z - aabb.x) * float(size.x);
-            float height = (aabb.w - aabb.y) * float(size.y);
-
-            float mipIndex = floor(log2(max(width, height)));
-
-            vec2 uv = (aabb.xy + aabb.zw) * 0.5;
-            //uv.y = 1 - uv.y;
-            // Sampler is set up to do min reduction, so this computes the minimum depth of a 2x2 texel quad
-            float depth = textureLod(depthPyramid, uv, mipIndex).r;
-            float depthSphere = zNear / (-centerViewSpace.z);
-
-            bDrawMesh = depthSphere > depth;
+            bDrawMesh = scene_z >= z_min;
+            //uint res_occluder = 1 - uint(step(scene_z, z_min));
+            //bDrawMesh = res_occluder >= 1;
         }*/
-
-        /*vec3 bmin = calcNdcPos(obj.bbmin, clipProj);
-        vec3 bmax = calcNdcPos(obj.bbmax, clipProj);
-        vec3 center = (obj.bbmin+obj.bbmax)/2.f;
-        vec3 centerViewSpace = (view * vec4(center, 1.0)).xyz;
-        float radius = length(center - obj.bbmin);
-
-        float boundsWidth = (bmax.x - bmin.x) * 2048.f;
-        float boundsHeight = (bmax.y - bmin.y) * 2048.f;
-        float mipIndex = floor(log2(max(boundsWidth, boundsHeight)));
-
-        float zNear = clipProj[3][2];
-        float occluderDepth = textureLod(depthPyramid, 0.5 * (bmin.xy + bmax.xy), mipIndex).x;
-        float nearestBoundsDepth = zNear / (-centerViewSpace.z - radius);
-
-        bool bOcclusionCulled = occluderDepth >= nearestBoundsDepth;
-        bDrawMesh = !bOcclusionCulled;*/
     }
 
     uvec4 drawMeshBallot = subgroupBallot(bDrawMesh);

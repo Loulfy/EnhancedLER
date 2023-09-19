@@ -30,7 +30,7 @@ namespace ler
         device->submitAndWait(cmd);
     }*/
 
-    vk::UniqueDescriptorPool ImGuiPass::createPool(LerDevicePtr& device)
+    vk::UniqueDescriptorPool ImGuiPass::createPool(const LerDevicePtr& device)
     {
         auto ctx = device->getVulkanContext();
         std::array<vk::DescriptorPoolSize, 11> pool_sizes =
@@ -56,7 +56,7 @@ namespace ler
         return ctx.device.createDescriptorPoolUnique(poolInfo);
     }
 
-    void ImGuiPass::init(LerDevicePtr& device, GLFWwindow* window)
+    void ImGuiPass::init(const LerDevicePtr& device, RenderSceneList& scene, GLFWwindow* window)
     {
         m_descriptorPool = createPool(device);
 
@@ -91,14 +91,14 @@ namespace ler
         device->submitAndWait(cmd);
     }
 
-    void ImGuiPass::prepare(LerDevicePtr& device)
+    void ImGuiPass::prepare(const LerDevicePtr& device)
     {
         ImGui_ImplVulkan_NewFrame();
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
     }
 
-    void ImGuiPass::render(LerDevicePtr& device, FrameWindow& frame, BatchedMesh& batch, const CameraParam& camera, SceneParam& scene)
+    void ImGuiPass::render(const LerDevicePtr& device, FrameWindow& frame, RenderSceneList& sceneList, RenderParams& params)
     {
         ImGui::Render();
         // Record dear ImGui primitives into command buffer
@@ -148,12 +148,12 @@ namespace ler
         return nullptr;
     }
 
-    void TextureViewerPass::init(LerDevicePtr& device, GLFWwindow* window)
+    void TextureViewerPass::init(const LerDevicePtr& device, RenderSceneList& scene, GLFWwindow* window)
     {
         m_sampler = device->createSampler(vk::SamplerAddressMode::eClampToEdge, false);
     }
 
-    void TextureViewerPass::render(LerDevicePtr& device, FrameWindow& frame, BatchedMesh& batch, const CameraParam& camera, SceneParam& scene)
+    void TextureViewerPass::render(const LerDevicePtr& device, FrameWindow& frame, RenderSceneList& sceneList, RenderParams& params)
     {
         ImGui::Begin("Texture Viewer", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
         if (ImGui::BeginCombo("##combo", current_item)) // The second parameter is the label previewed before opening the combo.

@@ -26,6 +26,7 @@ namespace ler
     {
     public:
 
+        friend class SceneImporter;
         explicit LerApp(LerConfig cfg = {});
         void run();
 
@@ -43,7 +44,10 @@ namespace ler
         void lockCursor() { glfwSetInputMode(m_window, GLFW_CURSOR, GLFW_CURSOR_DISABLED); }
         [[nodiscard]] bool isCursorLock() const { return glfwGetInputMode(m_window, GLFW_CURSOR) == GLFW_CURSOR_DISABLED; }
 
-        void loadSceneAsync(const fs::path& path, FsTag tag = FsTag_Assets) { m_scene.append(m_device, tag, path); }
+        void loadSceneAsync(const fs::path& path, FsTag tag = FsTag_Assets)
+        {
+            SceneImporter::LoadScene(m_device, m_renderer.getSceneBuffers(), tag, path);
+        }
 
         void operator()(SubmitTexture& submit)
         {
@@ -51,11 +55,11 @@ namespace ler
             m_device->getTexturePool()->set(submit.id, submit.texture, submissionId);
         }
 
-        void operator()(SubmitTransfer& submit)
+        void operator()(SubmitScene& submit)
         {
+            SceneImporter::SceneSubmissionPtr submission = submit.submission;
             uint64_t submissionId = m_device->submitCommand(submit.command);
-            submit.batch->registerSubmission(submissionId, submit.dependency);
-            submit.batch->loadSceneGraph(m_world);
+            submission->submissionId = submissionId;
         }
 
     private:
@@ -66,6 +70,7 @@ namespace ler
         static void glfw_size_callback(GLFWwindow* window, int width, int height);
 
         void updateSwapChain();
+        void notifyResize();
         void updateWindowIcon(const fs::path& path);
 
         void autoExec();
@@ -82,7 +87,7 @@ namespace ler
         std::array<FrameWindow, 3> m_targets;
         std::vector<std::shared_ptr<IRenderPass>> m_renderPasses;
         ControllerPtr m_controller;
-        BatchedMesh m_scene;
+        RenderSceneList m_renderer;
         flecs::world m_world;
         flecs::entity m_selected = flecs::entity::null();
     };

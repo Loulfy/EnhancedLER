@@ -22,6 +22,26 @@ struct Material
     ALIGNAS(16) vec3 color VARINIT(glm::vec3(1.f));
 };
 
+struct MeshDraw
+
+{
+    ALIGNAS(4) uint meshletOffset;
+    ALIGNAS(4) uint meshletCount;
+};
+
+struct Meshly
+{
+    ALIGNAS(16) vec3 center;
+    ALIGNAS(4) float radius;
+    ALIGNAS(4) int8_t coneAxis[3];
+    ALIGNAS(4) int8_t coneCutoff;
+
+    ALIGNAS(4) uint vertexOffset;
+    ALIGNAS(4) uint triangleOffset;
+    ALIGNAS(4) uint8_t vertexCount;
+    ALIGNAS(4) uint8_t triangleCount;
+};
+
 struct Meshlet
 {
     ALIGNAS(4) uint countIndex VARINIT(0);
@@ -32,6 +52,7 @@ struct Meshlet
 struct Instance
 {
     ALIGNAS(16) mat4 model VARINIT(glm::mat4(1.f));
+    ALIGNAS(16) vec4 bounds VARINIT(glm::vec4(0.f));
     ALIGNAS(16) vec3 bbmin VARINIT(glm::vec3(0.f));
     ALIGNAS(16) vec3 bbmax VARINIT(glm::vec3(0.f));
     ALIGNAS(4) uint matId VARINIT(0);

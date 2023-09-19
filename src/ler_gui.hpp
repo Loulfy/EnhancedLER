@@ -11,7 +11,7 @@
 #include <imgui_impl_glfw.h>
 #include <ImGuizmo.h>
 
-#include "ler_res.hpp"
+#include "ler_draw.hpp"
 
 namespace ler
 {
@@ -19,16 +19,16 @@ namespace ler
     {
     public:
 
-        void init(LerDevicePtr& device, GLFWwindow* window) override;
-        void prepare(LerDevicePtr& device) override;
-        void render(LerDevicePtr& device, FrameWindow& frame, BatchedMesh& batch, const CameraParam& camera, SceneParam& scene) override;
+        void init(const LerDevicePtr& device, RenderSceneList& scene, GLFWwindow* window) override;
+        void prepare(const LerDevicePtr& device) override;
+        void render(const LerDevicePtr& device, FrameWindow& frame, RenderSceneList& sceneList, RenderParams& params) override;
         void clean() override;
 
         static VkDescriptorSet createTextureDescriptorSet(const TexturePtr& texture, const vk::ImageSubresourceRange& sub, vk::Sampler sampler);
 
     private:
 
-        static vk::UniqueDescriptorPool createPool(LerDevicePtr& device);
+        static vk::UniqueDescriptorPool createPool(const LerDevicePtr& device);
         vk::UniqueDescriptorPool m_descriptorPool;
     };
 
@@ -36,8 +36,8 @@ namespace ler
     {
     public:
 
-        void init(LerDevicePtr& device, GLFWwindow* window) override;
-        void render(LerDevicePtr& device, FrameWindow& frame, BatchedMesh& batch, const CameraParam& camera, SceneParam& scene) override;
+        void init(const LerDevicePtr& device, RenderSceneList& scene, GLFWwindow* window) override;
+        void render(const LerDevicePtr& device, FrameWindow& frame, RenderSceneList& sceneList, RenderParams& params) override;
 
     private:
 

@@ -130,8 +130,11 @@ namespace ler
         glslang::SpvOptions options;
         spv::SpvBuildLogger logger;
         std::vector<uint32_t> spv;
-        options.disableOptimizer = false;
-        options.optimizeSize = true;
+        //options.disableOptimizer = false;
+        //options.optimizeSize = true;
+        options.stripDebugInfo = false;
+        options.emitNonSemanticShaderDebugInfo = true;
+        options.emitNonSemanticShaderDebugSource = true;
         glslang::GlslangToSpv(*program.getIntermediate(shader.getStage()), spv, &logger, &options);
         if(!logger.getAllMessages().empty())
             log::error(logger.getAllMessages());
