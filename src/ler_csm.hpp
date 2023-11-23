@@ -25,7 +25,7 @@ namespace ler
         void init(const LerDevicePtr& device, RenderSceneList& scene, GLFWwindow* window) override;
         void onSceneChange(const LerDevicePtr& device, SceneBuffers* scene) override;
         void render(const LerDevicePtr& device, FrameWindow& frame, RenderSceneList& sceneList, RenderParams& params) override;
-        void update(const CameraParam& param, SceneParam& scene);
+        void update(const CameraParam& param, SceneParamDep& scene);
 
     public:
 

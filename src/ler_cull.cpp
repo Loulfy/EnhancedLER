@@ -64,6 +64,7 @@ namespace ler
     {
         m_frustum.cull = prePass ? 0 : 42;
         m_frustum.num = instanceCount;
+        m_frustum.camera = camera.test;
         m_visibleBuffer->getUint(&drawCount);
         LerDevice::getFrustumPlanes(camera.proj * camera.view, m_frustum.planes);
         LerDevice::getFrustumCorners(camera.proj * camera.view, m_frustum.corners);
@@ -72,7 +73,7 @@ namespace ler
         m_frustumBuffer->uploadFromMemory(&m_frustum, sizeof(Frustum));
 
         cmd->bindPipeline(m_pipeline, m_descriptor);
-        cmd->cmdBuf.pushConstants(m_pipeline->pipelineLayout.get(), vk::ShaderStageFlagBits::eCompute, 0, sizeof(CameraParam), &camera);
+        cmd->cmdBuf.pushConstants(m_pipeline->pipelineLayout.get(), vk::ShaderStageFlagBits::eCompute, 0, 128, &camera);
         cmd->cmdBuf.dispatch(1 + m_frustum.num / 64, 1, 1);
 
         using ps = vk::PipelineStageFlagBits;

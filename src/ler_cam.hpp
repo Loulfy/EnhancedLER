@@ -41,6 +41,7 @@ namespace ler
 
         [[nodiscard]] glm::mat4 getViewMatrix() const { return m_view; }
         [[nodiscard]] glm::mat4 getProjMatrix() const { return m_proj; }
+        [[nodiscard]] glm::vec3 getEyePosition() const;
         [[nodiscard]] glm::vec3 getViewDirection() const;
         [[nodiscard]] glm::vec3 getRightVector() const;
         [[nodiscard]] float getNearClip() const { return m_zNear; }

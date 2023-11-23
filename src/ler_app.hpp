@@ -40,6 +40,8 @@ namespace ler
         void addPass() { m_renderPasses.emplace_back(std::make_shared<T>()); }
         void resize(int width, int height);
 
+        RenderGraph& renderGraph() { return m_graph; }
+
         void bindController(const std::shared_ptr<Controller>& controller) { m_controller = controller; }
         void lockCursor() { glfwSetInputMode(m_window, GLFW_CURSOR, GLFW_CURSOR_DISABLED); }
         [[nodiscard]] bool isCursorLock() const { return glfwGetInputMode(m_window, GLFW_CURSOR) == GLFW_CURSOR_DISABLED; }
@@ -86,8 +88,10 @@ namespace ler
         std::vector<TexturePtr> m_images;
         std::array<FrameWindow, 3> m_targets;
         std::vector<std::shared_ptr<IRenderPass>> m_renderPasses;
+        std::unique_ptr<rtxmu::VkAccelStructManager> m_rtxMemUtil;
         ControllerPtr m_controller;
         RenderSceneList m_renderer;
+        RenderGraph m_graph;
         flecs::world m_world;
         flecs::entity m_selected = flecs::entity::null();
     };

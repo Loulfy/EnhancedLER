@@ -70,6 +70,10 @@ namespace ler
         // Init device
         m_device = std::make_shared<LerDevice>(context);
 
+        // Init AS Memory Util
+        m_rtxMemUtil = std::make_unique<rtxmu::VkAccelStructManager>(context.instance, context.device, context.physicalDevice);
+        m_rtxMemUtil->Initialize(C08Mio);
+
         // Init Service
         Service::Init(m_device);
 
@@ -92,6 +96,11 @@ namespace ler
 
         m_renderer.allocate(m_device);
         m_renderer.install(m_world, m_device);
+
+        m_graph.addResource("textures", m_device->getTexturePool());
+        m_graph.addResource("instances", m_renderer.getInstanceBuffers());
+        m_graph.addResource("materials", m_renderer.getSceneBuffers().getMaterialBuffer());
+        m_graph.addResource("meshlet", m_renderer.getSceneBuffers().getMeshletBuffer());
 
         // HERE
 
@@ -187,6 +196,7 @@ namespace ler
         m_renderer.resize(m_device, m_swapChain.extent);
         for(auto& pass : m_renderPasses)
             pass->resize(m_device, m_swapChain.extent);
+        m_graph.resize(m_device, m_swapChain.extent);
     }
 
     void LerApp::resize(int width, int height)
@@ -216,6 +226,8 @@ namespace ler
 
         notifyResize();
 
+        m_graph.compile(m_device, m_swapChain.extent);
+
         while(!glfwWindowShouldClose(m_window))
         {
             glfwPollEvents();
@@ -229,7 +241,7 @@ namespace ler
 
             // Layout transition
             cmd = m_device->createCommand();
-            cmd->addBarrier(m_images[swapChainIndex], vk::PipelineStageFlagBits::eTopOfPipe, vk::PipelineStageFlagBits::eColorAttachmentOutput);
+            cmd->addImageBarrier(m_images[swapChainIndex], RenderTarget);
             m_device->submitCommand(cmd);
 
             // Update Camera
@@ -249,6 +261,7 @@ namespace ler
             //m_controller->updateMatrices();
             camera.proj = m_controller->getProjMatrix();
             camera.view = m_controller->getViewMatrix();
+            camera.test = glm::vec4(m_controller->getEyePosition(), m_controller->getNearClip());
             //camera.proj[1][1] *= -1;
 
             if(m_selected != flecs::entity::null())
@@ -264,7 +277,7 @@ namespace ler
 
                 glm::mat4 object = glm::translate(glm::mat4(1.f), center);
                 ImGuizmo::BeginFrame();
-                ImGuizmo::SetRect(0, 0, m_config.width, m_config.height);
+                ImGuizmo::SetRect(0.f, 0.f, float(m_config.width), float(m_config.height));
                 ImGuizmo::Manipulate(glm::value_ptr(camera.view), glm::value_ptr(camera.proj), ImGuizmo::OPERATION::TRANSLATE, ImGuizmo::WORLD, glm::value_ptr(object));
 
                 //m_selected.set<CTransform>({t});
@@ -274,6 +287,12 @@ namespace ler
 
             // Render
             RenderParams params(camera);
+            params.scene.instanceCount = m_renderer.getInstanceCount();
+
+            cmd = m_device->createCommand();
+            m_graph.execute(cmd, m_targets[swapChainIndex].image, m_renderer.getSceneBuffers(), params);
+            m_device->submitCommand(cmd);
+
             for(auto& pass : m_renderPasses)
                 pass->render(m_device, m_targets[swapChainIndex], m_renderer, params);
 
@@ -282,7 +301,7 @@ namespace ler
 
             // Layout transition
             cmd = m_device->createCommand();
-            cmd->addBarrier(m_images[swapChainIndex], vk::PipelineStageFlagBits::eColorAttachmentOutput, vk::PipelineStageFlagBits::eBottomOfPipe);
+            cmd->addImageBarrier(m_images[swapChainIndex], Present);
             m_device->submitCommand(cmd);
 
             // Present
@@ -298,11 +317,11 @@ namespace ler
 
             for(SceneBuffers* s : SceneImporter::PollUpdate(m_device, m_world))
             {
+                m_graph.onSceneChange(s);
                 for(auto& pass : m_renderPasses)
                     pass->onSceneChange(m_device, s);
             }
 
-            AsyncQueue<AsyncRequest>::Update(*this);
             AsyncQueue<AsyncRequest>::Update(*this);
             Event::GetDispatcher().update();
             m_device->runGarbageCollection();

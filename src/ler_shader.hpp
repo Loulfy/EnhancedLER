@@ -63,6 +63,7 @@ struct Frustum
 {
     ALIGNAS(16) vec4 planes[6];
     ALIGNAS(16) vec4 corners[8];
+    ALIGNAS(16) vec4 camera VARINIT(vec4(0.f));
     ALIGNAS(4) uint num VARINIT(0);
     ALIGNAS(4) uint cull VARINIT(0);
 };

@@ -48,19 +48,64 @@ namespace ler
         static constexpr std::array<float, 4> White = {1.f, 1.f, 1.f, 1.f};
         static constexpr std::array<float, 4> Gray = {0.45f, 0.55f, 0.6f, 1.f};
         static constexpr std::array<float, 4> Magenta = {1.f, 0.f, 1.f, 1.f};
+        static constexpr std::array<std::array<float, 4>, 10> Palette = {{
+            {0.620f, 0.004f, 0.259f, 1.f},
+            {0.835f, 0.243f, 0.310f, 1.f},
+            {0.957f, 0.427f, 0.263f, 1.f},
+            {0.992f, 0.682f, 0.380f, 1.f},
+            {0.996f, 0.878f, 0.545f, 1.f},
+            {0.902f, 0.961f, 0.596f, 1.f},
+            {0.671f, 0.867f, 0.643f, 1.f},
+            {0.400f, 0.761f, 0.647f, 1.f},
+            {0.196f, 0.533f, 0.741f, 1.f},
+            {0.369f, 0.310f, 0.635f, 1.f}
+        }};
     };
 
     struct CameraParam
     {
         alignas(16) glm::mat4 proj = glm::mat4(1.f);
         alignas(16) glm::mat4 view = glm::mat4(1.f);
+        alignas(16) glm::vec4 test;
     };
 
-    struct SceneParam
+    struct SceneParamDep
     {
         alignas(16) glm::vec4 split;
         glm::mat4 light[4] = {glm::mat4(1.f) };
     };
+
+    enum ResourceState
+    {
+        Undefined = 0,
+        ConstantBuffer = 0x1,
+        IndexBuffer = 0x2,
+        RenderTarget = 0x4,
+        UnorderedAccess = 0x8,
+        DepthWrite = 0x10,
+        DepthRead = 0x20,
+        PixelShader = 0x80,
+        ShaderResource = 0x40 | 0x80,
+        Indirect = 0x200,
+        CopyDest = 0x400,
+        CopySrc = 0x800,
+        Present = 0x1000,
+        Common = 0x2000,
+        Raytracing = 0x4000,
+        ShadingRateSrc = 0x8000,
+    };
+
+    enum class CommandQueue
+    {
+        Graphics,
+        Compute,
+        Transfer,
+        Count
+    };
+
+    vk::AccessFlags2 util_to_vk_access_flags(ResourceState state);
+    vk::ImageLayout util_to_vk_image_layout(ResourceState usage);
+    vk::PipelineStageFlags2 util_determine_pipeline_stage_flags2(vk::AccessFlags2 access_flags, CommandQueue queue_type);
 
     class IResource
     {
@@ -74,6 +119,7 @@ namespace ler
         IResource(const IResource&&) = delete;
         IResource& operator=(const IResource&) = delete;
         IResource& operator=(const IResource&&) = delete;
+        ResourceState state = Undefined;
     };
 
     struct Buffer : public IResource
@@ -109,6 +155,7 @@ namespace ler
         ~Texture() override { if(allocation) vmaDestroyImage(m_context.allocator, static_cast<VkImage>(handle), allocation); }
         explicit Texture(const VulkanContext& context) : m_context(context) { }
         [[nodiscard]] vk::ImageView view(vk::ImageSubresourceRange subresource = DefaultSub);
+        [[nodiscard]] vk::Extent2D extent() const;
 
         static constexpr vk::ImageSubresourceRange DefaultSub = vk::ImageSubresourceRange(vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1);
 
@@ -156,13 +203,21 @@ namespace ler
         vk::ClearValue clear = vk::ClearDepthStencilValue(1.0f, 0);
     };
 
-    using Attachments = std::initializer_list<Attachment>;
+    using Attachments = std::vector<Attachment>;
 
     struct PassDesc
     {
         vk::Extent2D viewport;
         Attachments colorAttachments;
         Attachment depthStencilAttachment;
+    };
+
+    struct RenderPass
+    {
+        std::array<vk::RenderingAttachmentInfo,8> colors;
+        vk::RenderingAttachmentInfo depth;
+        uint32_t colorCount = 0;
+        vk::Extent2D viewport;
     };
 
     struct RenderTarget
@@ -206,6 +261,8 @@ namespace ler
 
         std::optional<vk::DescriptorType> findBindingType(uint32_t set, uint32_t binding);
         void updateSampler(vk::DescriptorSet descriptor, uint32_t binding, vk::Sampler sampler, vk::ImageLayout layout, vk::ImageView view);
+        void updateSampler(vk::DescriptorSet descriptor, uint32_t binding, vk::Sampler& sampler, const std::span<TexturePtr>& textures);
+        void updateStorage(vk::DescriptorSet descriptor, uint32_t binding, const BufferPtr& buffer, uint64_t byteSize);
 
         vk::UniquePipeline handle;
         vk::UniquePipelineLayout pipelineLayout;
@@ -234,14 +291,6 @@ namespace ler
         explicit ComputePipeline(const VulkanContext& context) : BasePipeline(context) { }
     };
 
-    enum class CommandQueue
-    {
-        Graphics,
-        Compute,
-        Transfer,
-        Count
-    };
-
     class TrackedCommandBuffer
     {
     public:
@@ -256,14 +305,17 @@ namespace ler
         ~TrackedCommandBuffer();
         explicit TrackedCommandBuffer(const VulkanContext& context) : m_context(context){ }
 
-        void addBarrier(TexturePtr& texture, vk::PipelineStageFlagBits srcStage, vk::PipelineStageFlagBits dstStage);
+        void addImageBarrier(const TexturePtr& texture, ResourceState new_state) const;
+        void addBufferBarrier(const BufferPtr& buffer, ResourceState new_state) const;
+        void addBarrier(const std::shared_ptr<IResource>& resource, ResourceState new_state) const;
         void copyBuffer(BufferPtr& src, BufferPtr& dst, uint64_t byteSize = VK_WHOLE_SIZE, uint64_t dstOffset = 0);
         void copyBuffer(BufferPtr& src, BufferPtr& dst, vk::BufferCopy copy);
         void copyBufferToTexture(const BufferPtr& buffer, const TexturePtr& texture);
-        void bindPipeline(const PipelinePtr& pipeline, vk::DescriptorSet set = nullptr);
+        void bindPipeline(const PipelinePtr& pipeline, vk::DescriptorSet set = nullptr) const;
         void executePass(const PassDesc& desc);
-        void draw(uint32_t vertexCount);
-        void end();
+        void beginRenderPass(const RenderPass& pass);
+        void draw(uint32_t vertexCount) const;
+        void end() const;
 
     private:
 
@@ -352,6 +404,7 @@ namespace ler
 
         // Buffer
         BufferPtr createBuffer(uint32_t byteSize, vk::BufferUsageFlags usages = vk::BufferUsageFlagBits(), bool staging = false);
+        BufferPtr createBufferWithAlign(uint32_t byteSize, uint32_t minAlignment);
 
         // Texture
         TexturePtr createTexture(vk::Format format, const vk::Extent2D& extent, vk::SampleCountFlagBits sampleCount = vk::SampleCountFlagBits::e1, bool isRenderTarget = false, uint32_t arrayLayers = 1, uint32_t mipLevels = 1);
@@ -360,6 +413,7 @@ namespace ler
         vk::UniqueSampler createSampler(const vk::SamplerAddressMode& addressMode, bool filter);
         vk::UniqueSampler createSamplerMipMap(const vk::SamplerAddressMode& addressMode, bool filter, float maxLod, bool reduction = false);
         static vk::ImageAspectFlags guessImageAspectFlags(vk::Format format, bool stencil = true);
+        static bool hasDepth(vk::Format format);
         [[nodiscard]] TexturePtr getRenderTarget(RT target) const;
         void setRenderTarget(RT target, TexturePtr texture);
         TexturePoolPtr getTexturePool();
@@ -437,6 +491,7 @@ namespace ler
         uint32_t fetch(const fs::path& filename, FsTag tag);
 
         void receive(const Queue::CommandCompleteEvent& e);
+        [[nodiscard]] uint32_t getTextureCount() const;
         [[nodiscard]] std::span<TexturePtr> getTextures();
         [[nodiscard]] std::vector<vk::ImageView> getImageViews();
         [[nodiscard]] std::vector<std::string> getTextureList() const;

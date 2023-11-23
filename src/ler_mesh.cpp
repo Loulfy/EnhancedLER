@@ -122,7 +122,7 @@ namespace ler
         }
 
         if (aiScene->mNumTextures == 0)
-            FileSystemService::Get().mount(FsTag_Assimp, StdFileSystem::Create(ASSETS_DIR)); //StdFileSystem::Create(path.parent_path()));
+            FileSystemService::Get().mount(FsTag_Assimp, StdFileSystem::Create(ASSETS_DIR)); //StdFileSystem::Create(path.parent_path()) StdFileSystem::Create(ASSETS_DIR)
         else
             FileSystemService::Get().mount(FsTag_Assimp, AssimpFileSystem::Create(aiScene));
 

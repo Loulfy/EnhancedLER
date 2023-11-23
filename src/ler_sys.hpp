@@ -32,6 +32,7 @@ namespace ler
     static const fs::path ASSETS_DIR = fs::path(PROJECT_DIR) / "assets";
     static const fs::path CACHED_DIR = fs::path("cached");
 
+    static constexpr uint32_t C08Mio =  8 * 1024 * 1024;
     static constexpr uint32_t C16Mio = 16 * 1024 * 1024;
     static constexpr uint32_t C32Mio = 32 * 1024 * 1024;
     static constexpr uint32_t C64Mio = 64 * 1024 * 1024;

@@ -145,6 +145,11 @@ namespace ler
         m_submitted.erase(e.submissionId);
     }
 
+    uint32_t TexturePool::getTextureCount() const
+    {
+        return m_textureCount;
+    }
+
     std::span<TexturePtr> TexturePool::getTextures()
     {
         return {m_textures.data(), m_textureCount};

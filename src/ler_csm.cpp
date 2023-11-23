@@ -86,7 +86,7 @@ namespace ler
         device->submitCommand(cmd);*/
     }
 
-    void CascadedShadowPass::update(const CameraParam& param, SceneParam& scene)
+    void CascadedShadowPass::update(const CameraParam& param, SceneParamDep& scene)
     {
         /*float cascadeSplits[SHADOW_MAP_CASCADE_COUNT];
 

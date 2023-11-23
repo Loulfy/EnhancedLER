@@ -6,6 +6,12 @@ set(CMAKE_POLICY_DEFAULT_CMP0077 NEW)
 set(SPIRV_REFLECT_EXAMPLES OFF)
 set(SPIRV_REFLECT_EXECUTABLE OFF)
 set(SPIRV_REFLECT_STATIC_LIB ON)
+set(RTXMU_WITH_D3D12 OFF)
+set(FFX_API_VK ON)
+set(FFX_API_DX12 OFF)
+set(FFX_DENOISER ON)
+set(FFX_CLASSIFIER ON)
+set(ENABLE_HLSL ON)
 
 find_package(Vulkan REQUIRED)
 find_package(spdlog REQUIRED)
@@ -18,12 +24,16 @@ find_package(inih REQUIRED)
 find_package(glm REQUIRED)
 find_package(stb REQUIRED)
 find_package(gli REQUIRED)
+find_package(SPIRV-Tools REQUIRED)
 find_package(meshoptimizer REQUIRED)
+find_package(nlohmann_json REQUIRED)
 find_package(vulkan-memory-allocator REQUIRED)
 find_package(bshoshany-thread-pool REQUIRED)
 
+add_subdirectory(libs/RTXMU)
 add_subdirectory(libs/glslang)
 add_subdirectory(libs/SPIRV-Reflect)
+#add_subdirectory(libs/FidelityFX-SDK/sdk)
 
 include_directories(src)
 include_directories(libs/imgui)
@@ -98,6 +108,10 @@ set(LER
     "src/mpsc.hpp"
 )
 
+#ffx_denoiser_x64
+#ffx_classifier_x64
+#ffx_backend_vk_x64
+
 file(COPY ${PROJECT_SOURCE_DIR}/src/ler_shader.hpp DESTINATION ${PROJECT_SOURCE_DIR}/assets/)
 add_executable(ler main.cpp ${LER} ${IMGUI} ${WIN32_RESOURCES})
 target_link_libraries(ler PRIVATE
@@ -117,6 +131,7 @@ target_link_libraries(ler PRIVATE
     glslang
     glslang-default-resource-limits
     SPIRV
+    rtxmu
     physx::physx
     PhysX::PhysXFoundation
     PhysX::PhysXCommon
@@ -127,4 +142,5 @@ target_link_libraries(ler PRIVATE
     PhysX::PhysXCharacterKinematic
     meshoptimizer::meshoptimizer
     wbemuuid
+    nlohmann_json::nlohmann_json
 )

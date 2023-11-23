@@ -25,6 +25,7 @@ namespace ler
         static const vk::DynamicLoader dl;
         const auto vkGetInstanceProcAddr = dl.getProcAddress<PFN_vkGetInstanceProcAddr>("vkGetInstanceProcAddr");
         VULKAN_HPP_DEFAULT_DISPATCHER.init(vkGetInstanceProcAddr);
+        rtxmu::VkBlock::getDispatchLoader().vkGetInstanceProcAddr = vkGetInstanceProcAddr;
 
         auto sdkVersion = vk::enumerateInstanceVersion();
         uint32_t major = VK_VERSION_MAJOR(sdkVersion);
@@ -175,6 +176,7 @@ namespace ler
         vk::PhysicalDeviceVulkan13Features vulkan13Features;
         vulkan13Features.setMaintenance4(true);
         vulkan13Features.setDynamicRendering(true);
+        vulkan13Features.setSynchronization2(true);
 
         vk::StructureChain<vk::DeviceCreateInfo,
                 vk::PhysicalDeviceRayQueryFeaturesKHR,

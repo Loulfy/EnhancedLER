@@ -6,6 +6,11 @@
 
 namespace ler
 {
+    glm::vec3 Controller::getEyePosition() const
+    {
+        return m_position;
+    }
+
     glm::vec3 Controller::getViewDirection() const
     {
         auto m = glm::inverse(m_view);

@@ -22,7 +22,7 @@ namespace ler
         {".vert", EShLanguage::EShLangVertex},
         {".frag", EShLanguage::EShLangFragment},
         {".geom", EShLanguage::EShLangGeometry},
-        {".comp", EShLanguage::EShLangCompute}
+        {".comp", EShLanguage::EShLangCompute},
     }};
 
     std::optional<KindMapping> convertShaderExtension(const fs::path& ext)
@@ -108,6 +108,8 @@ namespace ler
         controls = static_cast<EShMessages>(controls | EShMsgKeepUncalled);
         controls = static_cast<EShMessages>(controls | EShMsgVulkanRules | EShMsgSpvRules);
         shader.setEnvTarget(glslang::EShTargetLanguage::EShTargetSpv, glslang::EShTargetLanguageVersion::EShTargetSpv_1_6);
+        if(stage.value().ext == ".test")
+            shader.setEnvInput(glslang::EShSourceHlsl, stage.value().kind, glslang::EShClientVulkan, 360);
         success &= compile(&shader, code, controls, name.string());
 
         if(!success)

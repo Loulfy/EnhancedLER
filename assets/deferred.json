@@ -1,0 +1,134 @@
+{
+  "name": "Test",
+  "passes": [
+    {
+      "name": "DeferredPass",
+      "pass": "graphics",
+      "resources": [
+        {
+          "type": 1,
+          "name": "position",
+          "binding": 0
+        },
+        {
+          "type": 1,
+          "name": "normal",
+          "binding": 1
+        },
+        {
+          "type": 1,
+          "name": "albedo",
+          "binding": 2
+        },
+        {
+          "type": 4,
+          "name": "backBuffer",
+          "binding": 0,
+          "loadOp": 1,
+          "format": 37
+        }
+      ]
+    },
+    {
+      "pass": "compute",
+      "name": "CullingPass",
+      "resources": [
+        {
+          "type": 0,
+          "name": "instances",
+          "binding": 1
+        },
+        {
+          "type": 0,
+          "name": "meshlet",
+          "binding": 2
+        },
+        {
+          "type": 2,
+          "name": "frustum",
+          "binding": 0,
+          "usage": 16,
+          "byteSize": 256
+        },
+        {
+          "type": 2,
+          "name": "draws",
+          "binding": 3,
+          "usage": 288,
+          "byteSize": 8388608
+        },
+        {
+          "type": 2,
+          "name": "count",
+          "binding": 4,
+          "usage": 288,
+          "byteSize": 256
+        }
+      ]
+    },
+    {
+      "name": "GBufferPass",
+      "pass": "graphics",
+      "resources": [
+        {
+          "type": 0,
+          "name": "instances",
+          "binding": 0
+        },
+        {
+          "type": 0,
+          "name": "draws",
+          "binding": 6
+        },
+        {
+          "type": 0,
+          "name": "count",
+          "binding": -1
+        },
+        {
+          "type": 0,
+          "name": "materials",
+          "binding": 1
+        },
+        {
+          "type": 1,
+          "name": "textures",
+          "binding": 2
+        },
+        {
+          "type": 0,
+          "name": "instances",
+          "binding": 5
+        },
+        {
+          "type": 4,
+          "name": "position",
+          "binding": 0,
+          "loadOp": 1,
+          "format": 97
+        },
+        {
+          "type": 4,
+          "name": "normal",
+          "binding": 1,
+          "loadOp": 1,
+          "format": 97
+        },
+        {
+          "type": 4,
+          "name": "albedo",
+          "binding": 2,
+          "loadOp": 1,
+          "format": 37
+        },
+        {
+          "type": 5,
+          "name": "depth",
+          "binding": 0,
+          "loadOp": 1,
+          "format": 126
+        }
+      ]
+    }
+  ]
+}

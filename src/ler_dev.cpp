@@ -43,6 +43,153 @@ namespace ler
 
     }
 
+    vk::AccessFlags2 util_to_vk_access_flags(ResourceState state)
+    {
+        vk::AccessFlags2 ret = {};
+        if ( state & ResourceState::CopySrc ) {
+            ret |= vk::AccessFlagBits2::eTransferRead;
+        }
+        if ( state & ResourceState::CopyDest ) {
+            ret |= vk::AccessFlagBits2::eTransferWrite;
+        }
+        if ( state & ResourceState::ConstantBuffer ) {
+            ret |= vk::AccessFlagBits2::eUniformRead | vk::AccessFlagBits2::eVertexAttributeRead;
+        }
+        if ( state & ResourceState::IndexBuffer ) {
+            ret |= vk::AccessFlagBits2::eIndexRead;
+        }
+        if ( state & ResourceState::UnorderedAccess ) {
+            ret |= vk::AccessFlagBits2::eShaderRead | vk::AccessFlagBits2::eShaderWrite;
+        }
+        if ( state & ResourceState::Indirect ) {
+            ret |= vk::AccessFlagBits2::eIndirectCommandRead;
+        }
+        if ( state & ResourceState::RenderTarget ) {
+            ret |= vk::AccessFlagBits2::eColorAttachmentRead | vk::AccessFlagBits2::eColorAttachmentWrite;
+        }
+        if ( state & ResourceState::DepthWrite ) {
+            ret |= vk::AccessFlagBits2::eDepthStencilAttachmentWrite | vk::AccessFlagBits2::eDepthStencilAttachmentRead;
+        }
+        if ( state & ResourceState::ShaderResource ) {
+            ret |= vk::AccessFlagBits2::eShaderRead;
+        }
+        if ( state & ResourceState::Present ) {
+            ret |= vk::AccessFlagBits2::eMemoryRead;
+        }
+        if ( state & ResourceState::ShadingRateSrc ) {
+            ret |= vk::AccessFlagBits2::eFragmentShadingRateAttachmentReadKHR;
+        }
+        if ( state & ResourceState::Raytracing ) {
+            ret |= vk::AccessFlagBits2::eAccelerationStructureReadKHR | vk::AccessFlagBits2::eAccelerationStructureWriteKHR;
+        }
+        return ret;
+    }
+
+    vk::ImageLayout util_to_vk_image_layout(ResourceState usage)
+    {
+        if ( usage & ResourceState::CopySrc )
+            return vk::ImageLayout::eTransferSrcOptimal;
+
+        if ( usage & ResourceState::CopyDest )
+            return vk::ImageLayout::eTransferDstOptimal;
+
+        if ( usage & ResourceState::RenderTarget )
+            return vk::ImageLayout::eAttachmentOptimal;
+
+        if ( usage & ResourceState::DepthWrite )
+            return vk::ImageLayout::eAttachmentOptimal;
+
+        if ( usage & ResourceState::DepthRead )
+            return vk::ImageLayout::eReadOnlyOptimal;
+
+        if ( usage & ResourceState::UnorderedAccess )
+            return vk::ImageLayout::eGeneral;
+
+        if ( usage & ResourceState::ShaderResource )
+            return vk::ImageLayout::eReadOnlyOptimal;
+
+        if ( usage & ResourceState::Present )
+            return vk::ImageLayout::ePresentSrcKHR;
+
+        if ( usage == ResourceState::Common )
+            return vk::ImageLayout::eGeneral;
+
+        if ( usage == ResourceState::ShadingRateSrc )
+            return vk::ImageLayout::eFragmentShadingRateAttachmentOptimalKHR;
+
+        return vk::ImageLayout::eUndefined;
+    }
+
+    vk::PipelineStageFlags2 util_determine_pipeline_stage_flags2(vk::AccessFlags2 _access_flags, CommandQueue queue_type)
+    {
+        auto access_flags = static_cast<VkAccessFlags2>(_access_flags);
+        vk::PipelineStageFlags2 flags = {};
+        switch (queue_type)
+        {
+            default:
+            case CommandQueue::Graphics:
+            {
+                if ( ( access_flags & ( VK_ACCESS_INDEX_READ_BIT | VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT ) ) != 0 )
+                    flags |= vk::PipelineStageFlagBits2::eVertexInput;
+
+                if ( ( access_flags & ( VK_ACCESS_UNIFORM_READ_BIT | VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT ) ) != 0 )
+                {
+                    flags |= vk::PipelineStageFlagBits2::eVertexShader;
+                    flags |= vk::PipelineStageFlagBits2::eFragmentShader;
+                    flags |= vk::PipelineStageFlagBits2::eComputeShader;
+                    flags |= vk::PipelineStageFlagBits2::eRayTracingShaderKHR;
+                }
+
+                if ( ( access_flags & VK_ACCESS_INPUT_ATTACHMENT_READ_BIT ) != 0 )
+                    flags |= vk::PipelineStageFlagBits2::eFragmentShader;
+
+                if ( ( access_flags & ( VK_ACCESS_2_ACCELERATION_STRUCTURE_READ_BIT_KHR | VK_ACCESS_2_ACCELERATION_STRUCTURE_WRITE_BIT_KHR ) ) != 0 )
+                    flags |= vk::PipelineStageFlagBits2::eAccelerationStructureBuildKHR;
+
+                if ( ( access_flags & ( VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT ) ) != 0 )
+                    flags |= vk::PipelineStageFlagBits2::eColorAttachmentOutput;
+
+                if ( ( access_flags & VK_ACCESS_FRAGMENT_SHADING_RATE_ATTACHMENT_READ_BIT_KHR ) != 0 )
+                    flags |= vk::PipelineStageFlagBits2::eFragmentShadingRateAttachmentKHR;
+
+                if ( ( access_flags & ( VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT ) ) != 0 )
+                    flags |= vk::PipelineStageFlagBits2::eEarlyFragmentTests | vk::PipelineStageFlagBits2::eLateFragmentTests;
+
+                break;
+            }
+            case CommandQueue::Compute:
+            {
+                if ( ( access_flags & ( VK_ACCESS_INDEX_READ_BIT | VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT ) ) != 0 ||
+                     ( access_flags & VK_ACCESS_INPUT_ATTACHMENT_READ_BIT ) != 0 ||
+                     ( access_flags & ( VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT ) ) != 0 ||
+                     ( access_flags & ( VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT ) ) != 0 )
+                    return vk::PipelineStageFlagBits2::eAllCommands;
+
+                if ( ( access_flags & ( VK_ACCESS_UNIFORM_READ_BIT | VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT ) ) != 0 )
+                    flags |= vk::PipelineStageFlagBits2::eComputeShader;
+
+                break;
+            }
+            case CommandQueue::Transfer:
+                return vk::PipelineStageFlagBits2::eAllCommands;
+        }
+
+        // Compatible with both compute and graphics queues
+        if ( ( access_flags & VK_ACCESS_INDIRECT_COMMAND_READ_BIT ) != 0 )
+            flags |= vk::PipelineStageFlagBits2::eDrawIndirect;
+
+        if ( ( access_flags & ( VK_ACCESS_TRANSFER_READ_BIT | VK_ACCESS_TRANSFER_WRITE_BIT ) ) != 0 )
+            flags |= vk::PipelineStageFlagBits2::eTransfer;
+
+        if ( ( access_flags & ( VK_ACCESS_HOST_READ_BIT | VK_ACCESS_HOST_WRITE_BIT ) ) != 0 )
+            flags |= vk::PipelineStageFlagBits2::eHost;
+
+        if ( flags == vk::PipelineStageFlags2() )
+            flags = vk::PipelineStageFlagBits2::eTopOfPipe;
+
+        return flags;
+    }
+
     BufferPtr LerDevice::createBuffer(uint32_t byteSize, vk::BufferUsageFlags usages, bool staging)
     {
         auto buffer = std::make_shared<Buffer>(m_context);
@@ -62,6 +209,26 @@ namespace ler
 
         vmaCreateBuffer(m_context.allocator, reinterpret_cast<VkBufferCreateInfo*>(&buffer->info), &buffer->allocInfo,
                         reinterpret_cast<VkBuffer*>(&buffer->handle), &buffer->allocation, &buffer->hostInfo);
+
+        return buffer;
+    }
+
+    BufferPtr LerDevice::createBufferWithAlign(uint32_t byteSize, uint32_t minAlignment)
+    {
+        auto buffer = std::make_shared<Buffer>(m_context);
+        vk::BufferUsageFlags usageFlags = vk::BufferUsageFlagBits::eTransferSrc | vk::BufferUsageFlagBits::eTransferDst;
+        usageFlags |= vk::BufferUsageFlagBits::eShaderDeviceAddress;
+        usageFlags |= vk::BufferUsageFlagBits::eAccelerationStructureBuildInputReadOnlyKHR;
+        buffer->info = vk::BufferCreateInfo();
+        buffer->info.setSize(byteSize);
+        buffer->info.setUsage(usageFlags);
+        buffer->info.setSharingMode(vk::SharingMode::eExclusive);
+
+        buffer->allocInfo.usage = VMA_MEMORY_USAGE_AUTO;
+        buffer->allocInfo.flags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT;
+
+        vmaCreateBufferWithAlignment(m_context.allocator, reinterpret_cast<VkBufferCreateInfo*>(&buffer->info), &buffer->allocInfo,
+                        minAlignment, reinterpret_cast<VkBuffer*>(&buffer->handle), &buffer->allocation, &buffer->hostInfo);
 
         return buffer;
     }
@@ -136,6 +303,11 @@ namespace ler
             default:
                 return vk::ImageAspectFlagBits::eColor;
         }
+    }
+
+    bool LerDevice::hasDepth(vk::Format format)
+    {
+        return guessImageAspectFlags(format, false) == vk::ImageAspectFlagBits::eDepth;
     }
 
     TexturePoolPtr LerDevice::getTexturePool()
@@ -222,6 +394,11 @@ namespace ler
         return std::get<0>(iter_pair)->second.get();
     }
 
+    vk::Extent2D Texture::extent() const
+    {
+        return {info.extent.width, info.extent.height};
+    }
+
     void LerDevice::populateTexture(const TexturePtr& texture, vk::Format format, const vk::Extent2D& extent,
                                     vk::SampleCountFlagBits sampleCount, bool isRenderTarget, uint32_t arrayLayers, uint32_t mipLevels)
     {
@@ -258,6 +435,7 @@ namespace ler
     {
         auto texture = std::make_shared<Texture>(m_context);
 
+        texture->name = "backbuffer";
         texture->info = vk::ImageCreateInfo();
         texture->info.setImageType(vk::ImageType::e2D);
         texture->info.setExtent(vk::Extent3D(extent.width, extent.height, 1));
@@ -474,6 +652,22 @@ namespace ler
             shader->descriptorMap.insert({set->set, desc});
         }
 
+        if (module.shader_stage == SPV_REFLECT_SHADER_STAGE_FRAGMENT_BIT)
+        {
+            // Render Target
+            result = spvReflectEnumerateOutputVariables(&module, &count, nullptr);
+            assert(result == SPV_REFLECT_RESULT_SUCCESS);
+
+            std::vector<SpvReflectInterfaceVariable*> outputs(count);
+            result = spvReflectEnumerateOutputVariables(&module, &count, outputs.data());
+            assert(result == SPV_REFLECT_RESULT_SUCCESS);
+
+            for(SpvReflectInterfaceVariable* var : outputs)
+            {
+                log::debug("texture location = {}, format = {}", var->location, vk::to_string(vk::Format(var->format)));
+            }
+        }
+
         spvReflectDestroyShaderModule(&module);
         return shader;
     }
@@ -588,6 +782,60 @@ namespace ler
         imageInfo.setImageView(view);
 
         descriptorWriteInfo.setImageInfo(descriptorImageInfo);
+        descriptorWrites.push_back(descriptorWriteInfo);
+        m_context.device.updateDescriptorSets(descriptorWrites, nullptr);
+    }
+
+    void BasePipeline::updateSampler(vk::DescriptorSet descriptor, uint32_t binding, vk::Sampler& sampler, const std::span<TexturePtr>& textures)
+    {
+        auto d = static_cast<VkDescriptorSet>(descriptor);
+        uint32_t set = descriptorPoolMap[d];
+        auto type = findBindingType(set, binding);
+        std::vector<vk::WriteDescriptorSet> descriptorWrites;
+        std::vector<vk::DescriptorImageInfo> descriptorImageInfo;
+
+        auto descriptorWriteInfo = vk::WriteDescriptorSet();
+        descriptorWriteInfo.setDescriptorType(type.value());
+        descriptorWriteInfo.setDstBinding(binding);
+        descriptorWriteInfo.setDstSet(descriptor);
+        descriptorWriteInfo.setDescriptorCount(textures.size());
+
+        for(auto& tex : textures)
+        {
+            auto& imageInfo = descriptorImageInfo.emplace_back();
+            imageInfo = vk::DescriptorImageInfo();
+            imageInfo.setSampler(sampler);
+            if(tex && LerDevice::guessImageAspectFlags(tex->info.format) == vk::ImageAspectFlagBits::eColor)
+                imageInfo.setImageLayout(vk::ImageLayout::eReadOnlyOptimal);
+            else
+                imageInfo.setImageLayout(vk::ImageLayout::eDepthReadOnlyOptimal);
+            if(type == vk::DescriptorType::eStorageImage)
+                imageInfo.setImageLayout(vk::ImageLayout::eGeneral);
+            if(tex)
+                imageInfo.setImageView(tex->view());
+        }
+
+        descriptorWriteInfo.setImageInfo(descriptorImageInfo);
+        descriptorWrites.push_back(descriptorWriteInfo);
+        m_context.device.updateDescriptorSets(descriptorWrites, nullptr);
+    }
+
+    void BasePipeline::updateStorage(vk::DescriptorSet descriptor, uint32_t binding, const BufferPtr& buffer, uint64_t byteSize)
+    {
+        auto d = static_cast<VkDescriptorSet>(descriptor);
+        uint32_t set = descriptorPoolMap[d];
+        auto type = findBindingType(set, binding);
+        std::vector<vk::WriteDescriptorSet> descriptorWrites;
+
+        auto descriptorWriteInfo = vk::WriteDescriptorSet();
+        descriptorWriteInfo.setDescriptorType(type.value());
+        descriptorWriteInfo.setDstBinding(binding);
+        descriptorWriteInfo.setDstSet(descriptor);
+        descriptorWriteInfo.setDescriptorCount(1);
+
+        vk::DescriptorBufferInfo buffInfo(buffer->handle, 0, byteSize);
+
+        descriptorWriteInfo.setBufferInfo(buffInfo);
         descriptorWrites.push_back(descriptorWriteInfo);
         m_context.device.updateDescriptorSets(descriptorWrites, nullptr);
     }
